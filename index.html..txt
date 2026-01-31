@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Peacekeeper Jump — Demo listo</title>
+  <style>
+    /* Minimal styles embedded for easy single-file use */
+    html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:#071425;color:#fff}
+    #game-container{width:900px;height:500px;margin:20px auto;border:4px solid #2b6cb0;background:linear-gradient(#0b2a3a,#071425);position:relative}
+    .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:60}
+    .hidden{display:none}
+    #intro-box{background:#fff;color:#000;padding:18px;width:760px;max-height:90vh;overflow:auto;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+    #intro-top{display:flex;gap:12px;align-items:center}
+    #intro-logo{max-height:110px;max-width:220px;object-fit:contain}
+    #intro-preview{position:relative;width:320px;height:160px;display:flex;align-items:center;justify-content:center;background:#f7f9fb;border-radius:8px}
+    #preview-peacekeeper{position:absolute;left:10px;bottom:6px;height:120px}
+    #preview-logo{width:92px;height:92px;object-fit:contain;transform-origin:center;animation:spin 3.6s linear infinite}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    .section h2{margin:10px 0 6px 0}
+    ul{margin:8px 0 12px 18px;color:#111}
+    .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+    button{padding:8px 14px;border-radius:6px;border:none;cursor:pointer;background:#2b6cb0;color:#fff}
+    button.secondary{background:#6b7280}
+    #menu-box{background:#fff;color:#000;padding:18px;width:520px;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+    #menu-box label{display:block;margin:8px 0}
+    #question-box{background:#fff;color:#000;padding:14px;width:640px;border-radius:8px;box-shadow:0 6px 16px rgba(0,0,0,.4)}
+    #choices{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+    .choice{padding:10px;border:1px solid #ccc;border-radius:8px;cursor:pointer;background:#f0f3f5;color:#111}
+    .choice.selected{background:#2b6cb0;color:#fff;border-color:#1e4a86}
+    #hud{position:absolute;left:12px;top:12px;color:#fff;z-index:10;font-size:16px}
+    #hud img{max-height:36px;display:block;margin-bottom:6px}
+    input[type=file]{display:block;margin-top:6px}
+  </style>
+
+  <!-- Phaser from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+</head>
+<body>
+  <div id="game-container"></div>
+
+  <!-- Intro overlay (first screen) -->
+  <div id="intro-overlay" class="overlay">
+    <div id="intro-box" role="dialog" aria-modal="true">
+      <div id="intro-top">
+        <!-- If you uploaded a real logo into assets/images/cencapopaz_logo.png it will show; otherwise hidden -->
+        <img id="intro-logo" src="assets/images/cencapopaz_logo.png" alt="CENCAPOPAZ logo" onerror="this.style.display='none'">
+        <div id="intro-preview">
+          <!-- simple inline peacekeeper SVG -->
+          <svg id="preview-peacekeeper" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Peacekeeper">
+            <g fill="none" stroke="#0b3b2d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="60" cy="48" r="20" fill="#2ecc71" stroke="#0b3b2d"/>
+              <path d="M60 68 v36" stroke="#0b3b2d" fill="#2ecc71"/>
+              <path d="M60 104 v36" stroke="#0b3b2d"/>
+              <path d="M70 74 L110 46" stroke="#0b3b2d" />
+              <circle cx="116" cy="42" r="4" fill="#0b3b2d"/>
+              <rect x="46" y="72" width="28" height="20" rx="4" fill="#145b4c"/>
+            </g>
+          </svg>
+
+          <div id="rotating-logo-preview">
+            <img id="preview-logo" src="assets/images/cencapopaz_logo.png" alt="logo" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 300 120%22><rect width=%22300%22 height=%22120%22 fill=%22%23ffffff%22 /><text x=%2210%22 y=%2275%22 font-size=%2240%22 fill=%220b1220%22>LOGO</text></svg>'" />
+          </div>
+        </div>
+      </div>
+
+      <h1>Peacekeeper Jump</h1>
+      <div class="section" id="intro-instructions">
+        <h2>Instrucciones</h2>
+        <ul>
+          <li>Toca o haz clic para saltar y evitar barreras.</li>
+          <li>Al tocar una barrera el juego se pausa y aparece una pregunta de inglés. Responde para continuar.</li>
+          <li>3 vidas: fallar resta una vida; si llegas a 0, termina el juego.</li>
+          <li>Puedes subir tu voz en el menú para reproducirla con efecto militar.</li>
+        </ul>
+      </div>
+
+      <div class="section" id="intro-history">
+        <h2>Sobre CENCAPOPAZ</h2>
+        <p style="color:#111;line-height:1.3">
+          CENCAPOPAZ (Centro de Capacitación para la Paz) apoya la formación en temas de paz y resolución de conflictos.
+          Este prototipo mezcla ejercicios de inglés con mecánicas de juego para aprendizaje activo.
+        </p>
+      </div>
+
+      <div class="actions">
+        <button id="accept-intro">Aceptar y continuar</button>
+        <button id="skip-intro" class="secondary">Saltar introducción</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menu overlay (appears after intro) -->
+  <div id="menu-overlay" class="overlay hidden">
+    <div id="menu-box">
+      <div style="text-align:center;margin-bottom:8px">
+        <img id="menu-logo" src="assets/images/cencapopaz_logo.png" alt="logo" style="max-height:64px" onerror="this.style.display='none'">
+      </div>
+
+      <h1 style="margin-top:0">Peacekeeper Jump</h1>
+
+      <label>Subir voz (WAV/MP3):
+        <input id="voice-file-input" type="file" accept="audio/*">
+      </label>
+
+      <div id="voice-controls" style="margin-top:8px">
+        <button id="play-voice" disabled>Reproducir voz (tono militar)</button>
+        <button id="stop-voice" disabled class="secondary">Detener</button>
+      </div>
+
+      <label>Modo de escucha:
+        <select id="listening-mode"><option value="tts" selected>TTS (voz del navegador)</option><option value="audio">Audio</option></select>
+      </label>
+      <label>Dificultad:
+        <select id="difficulty-select"><option value="easy">Fácil</option><option value="medium" selected>Medio</option><option value="hard">Difícil</option></select>
+      </label>
+
+      <div style="display:flex;gap:10px;margin-top:10px;justify-content:flex-end">
+        <button id="start-btn">Iniciar juego</button>
+        <button id="view-scores">Ver puntajes</button>
+      </div>
+
+      <div id="scores-list" class="hidden" style="margin-top:10px;max-height:140px;overflow:auto;background:#f7f7f7;padding:8px;border-radius:6px;color:#111"></div>
+    </div>
+  </div>
+
+  <!-- Questions overlay -->
+  <div id="question-overlay" class="overlay hidden">
+    <div id="question-box" role="dialog" aria-modal="true" aria-labelledby="question-text">
+      <h3 id="question-text"></h3>
+      <div id="audio-controls"></div>
+      <div id="choices"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+        <button id="submit-btn">Enviar</button>
+        <button id="skip-btn" class="secondary">Saltar (pierde 1 vida)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /**********************************************************************
+   * Single-file playable demo
+   * - All questions inline (no fetch)
+   * - TTS and WebAudio voice upload + simple processing (military tone)
+   * - Phaser 3 game embedded via CDN
+   * - Uses generated placeholder logo in canvas to avoid missing assets
+   **********************************************************************/
+
+  // Questions inline
+  const QUESTIONS = [
+    {id:1,type:'grammar',difficulty:'easy',text:'Choose the correct form: "She ___ to the store yesterday."',choices:['go','went','gone','going'],answer:1},
+    {id:2,type:'listening',difficulty:'easy',text:'The speaker says: "I will arrive at five." Choose the correct option.',choices:['He will arrive at five','I will arrive at five','They arrived at five','We arrived at five'],answer:1},
+    {id:3,type:'grammar',difficulty:'medium',text:'If I ___ you, I would apologize.',choices:['was','am','were','will be'],answer:2},
+    {id:4,type:'listening',difficulty:'hard',text:'The speaker mentions plans being postponed. Choose the best summary.',choices:['Plans changed','Event cancelled','Meeting postponed','Travel confirmed'],answer:2}
+  ];
+
+  // DOM refs
+  const introOverlay = document.getElementById('intro-overlay');
+  const acceptIntroBtn = document.getElementById('accept-intro');
+  const skipIntroBtn = document.getElementById('skip-intro');
+
+  const menuOverlay = document.getElementById('menu-overlay');
+  const startBtn = document.getElementById('start-btn');
+  const difficultySelect = document.getElementById('difficulty-select');
+  const listeningModeSelect = document.getElementById('listening-mode');
+  const viewScoresBtn = document.getElementById('view-scores');
+  const scoresListDiv = document.getElementById('scores-list');
+
+  const voiceFileInput = document.getElementById('voice-file-input');
+  const playVoiceBtn = document.getElementById('play-voice');
+  const stopVoiceBtn = document.getElementById('stop-voice');
+
+  const questionOverlay = document.getElementById('question-overlay');
+  const qText = document.getElementById('question-text');
+  const choicesDiv = document.getElementById('choices');
+  const audioControls = document.getElementById('audio-controls');
+  const submitBtn = document.getElementById('submit-btn');
+  const skipBtn = document.getElementById('skip-btn');
+
+  let selectedChoiceIndex = -1;
+  let currentQuestion = null;
+  let onAnswerCallback = null;
+  let settings = { listeningMode: 'tts', difficulty: 'medium' };
+
+  // WebAudio for uploaded voice
+  let audioCtx = null;
+  let userVoiceBuffer = null;
+  let currentVoiceSource = null;
+
+  // Intro actions
+  acceptIntroBtn.addEventListener('click', () => {
+    introOverlay.classList.add('hidden');
+    openMenu();
+  });
+  skipIntroBtn.addEventListener('click', () => {
+    introOverlay.classList.add('hidden');
+    openMenu();
+  });
+
+  function openMenu() {
+    menuOverlay.classList.remove('hidden');
+    difficultySelect.value = settings.difficulty;
+    listeningModeSelect.value = settings.listeningMode;
+
+    difficultySelect.addEventListener('change', e => settings.difficulty = e.target.value);
+    listeningModeSelect.addEventListener('change', e => settings.listeningMode = e.target.value);
+
+    startBtn.addEventListener('click', () => {
+      menuOverlay.classList.add('hidden');
+      startPhaserGame();
+    });
+
+    viewScoresBtn.addEventListener('click', () => {
+      const scores = JSON.parse(localStorage.getItem('pkj_scores_v1') || '[]');
+      scoresListDiv.innerHTML = '';
+      scoresListDiv.classList.remove('hidden');
+      if (!scores.length) scoresListDiv.textContent = 'No hay puntajes guardados todavía.';
+      else scores.forEach(s => {
+        const d = document.createElement('div');
+        d.textContent = `${s.name || 'Jugador'} — ${s.score} pts — ${new Date(s.when).toLocaleString()}`;
+        scoresListDiv.appendChild(d);
+      });
+    });
+  }
+
+  // Voice upload + processing controls
+  voiceFileInput.addEventListener('change', async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return alert('No file selected');
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const arrayBuffer = await f.arrayBuffer();
+    try {
+      userVoiceBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      playVoiceBtn.disabled = false;
+      stopVoiceBtn.disabled = false;
+      alert('Voz cargada correctamente. Pulsa "Reproducir voz (tono militar)".');
+    } catch (err) {
+      console.error('decodeAudioData error', err);
+      alert('No se pudo procesar el archivo. Usa WAV/MP3 estándar.');
+    }
+  });
+
+  playVoiceBtn.addEventListener('click', () => {
+    if (!userVoiceBuffer) return alert('Sube primero un archivo de voz.');
+    playVoiceWithMilitaryTone(userVoiceBuffer);
+  });
+  stopVoiceBtn.addEventListener('click', stopCurrentVoice);
+
+  function playVoiceWithMilitaryTone(buffer) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    stopCurrentVoice();
+    const src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    // Slightly lower pitch by reducing playbackRate (simple)
+    src.playbackRate.value = 0.92;
+
+    const lowShelf = audioCtx.createBiquadFilter();
+    lowShelf.type = 'lowshelf';
+    lowShelf.frequency.value = 800;
+    lowShelf.gain.value = 6;
+
+    const lowpass = audioCtx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 8000;
+
+    const convolver = audioCtx.createConvolver();
+    convolver.buffer = createReverbImpulse(audioCtx, 0.36, 2.0);
+
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = 1.0;
+
+    src.connect(lowShelf);
+    lowShelf.connect(lowpass);
+    lowpass.connect(convolver);
+    convolver.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    src.start(0);
+    currentVoiceSource = src;
+  }
+
+  function stopCurrentVoice() {
+    try {
+      if (currentVoiceSource) {
+        currentVoiceSource.stop();
+        currentVoiceSource.disconnect();
+        currentVoiceSource = null;
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function createReverbImpulse(ctx, duration = 0.36, decay = 2.0) {
+    const rate = ctx.sampleRate;
+    const length = Math.floor(rate * duration);
+    const impulse = ctx.createBuffer(2, length, rate);
+    for (let i = 0; i < 2; i++) {
+      const channel = impulse.getChannelData(i);
+      for (let j = 0; j < length; j++) {
+        channel[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / length, decay);
+      }
+    }
+    return impulse;
+  }
+
+  // Question overlay: returns a Promise resolved when user answers
+  function openQuestionOverlay(question) {
+    currentQuestion = question;
+    selectedChoiceIndex = -1;
+    qText.textContent = question.text;
+    choicesDiv.innerHTML = '';
+    audioControls.innerHTML = '';
+
+    if (question.type === 'listening') {
+      if (settings.listeningMode === 'audio' && question.audio) {
+        const audioEl = document.createElement('audio');
+        audioEl.controls = true;
+        audioEl.src = question.audio;
+        audioControls.appendChild(audioEl);
+      } else {
+        const playBtn = document.createElement('button');
+        playBtn.textContent = 'Reproducir audio (TTS)';
+        playBtn.classList.add('secondary');
+        playBtn.addEventListener('click', () => speakText(question.text));
+        audioControls.appendChild(playBtn);
+
+        if (userVoiceBuffer) {
+          const playUserBtn = document.createElement('button');
+          playUserBtn.textContent = 'Reproducir tu voz (militar)';
+          playUserBtn.addEventListener('click', () => playVoiceWithMilitaryTone(userVoiceBuffer));
+          audioControls.appendChild(playUserBtn);
+        }
+      }
+    }
+
+    question.choices.forEach((c, i) => {
+      const d = document.createElement('div');
+      d.className = 'choice';
+      d.textContent = c;
+      d.tabIndex = 0;
+      d.addEventListener('click', () => {
+        Array.from(choicesDiv.children).forEach(ch => ch.classList.remove('selected'));
+        d.classList.add('selected');
+        selectedChoiceIndex = i;
+      });
+      d.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') d.click(); });
+      choicesDiv.appendChild(d);
+    });
+
+    questionOverlay.classList.remove('hidden');
+    return new Promise((resolve) => {
+      onAnswerCallback = (result) => {
+        onAnswerCallback = null;
+        questionOverlay.classList.add('hidden');
+        resolve(result);
+      };
+    });
+  }
+
+  submitBtn.addEventListener('click', () => {
+    if (selectedChoiceIndex < 0) { alert('Selecciona una opción.'); return; }
+    const ok = (selectedChoiceIndex === currentQuestion.answer);
+    onAnswerCallback && onAnswerCallback({ ok, selected: selectedChoiceIndex });
+  });
+  skipBtn.addEventListener('click', () => onAnswerCallback && onAnswerCallback({ ok: false, skipped: true }));
+
+  function speakText(text) {
+    if (!window.speechSynthesis) return alert('TTS no disponible en este navegador.');
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'en-US';
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  }
+
+  // Start Phaser game
+  function startPhaserGame() {
+    const config = {
+      type: Phaser.AUTO,
+      width: 900,
+      height: 500,
+      parent: 'game-container',
+      physics: { default: 'arcade', arcade: { gravity: { y: 1200 }, debug: false } },
+      scene: { preload, create, update }
+    };
+    new Phaser.Game(config);
+
+    function preload() {
+      this.load.image('ground', 'https://i.imgur.com/3cKQb1Z.png');
+      this.load.image('box', 'https://i.imgur.com/8bKQ8Zy.png');
+      // Do NOT depend on external logo image in canvas; DOM may show uploaded logo separately.
+    }
+
+    let player, obstacles, spawnTimer;
+    let score = 0, lives = 3, canAsk = true;
+    let obstaclesMoving = true;
+    let logoSprite, armSprite;
+
+    function create() {
+      this.add.tileSprite(900/2, 500-30, 900, 60, 'ground').setDepth(0);
+
+      // player: simple rectangle texture
+      player = this.physics.add.sprite(160, 380, null);
+      player.setSize(48,72);
+      player.setCollideWorldBounds(true);
+      const g = this.add.graphics();
+      g.fillStyle(0x2ecc71, 1);
+      g.fillRect(-24, -36, 48, 72);
+      g.generateTexture('playerTex', 48, 72);
+      g.destroy();
+      player.setTexture('playerTex');
+      player.setBounce(0.0);
+      player.setY(380);
+
+      // obstacles
+      obstacles = this.physics.add.group();
+      spawnTimer = this.time.addEvent({ delay: 1400, loop: true, callback: spawnObstacle, callbackScope: this });
+      this.physics.add.overlap(player, obstacles, handleObstacleOverlap, null, this);
+
+      // click/tap to jump
+      this.input.on('pointerdown', () => { if (player.body.touching.down) player.setVelocityY(-520); });
+
+      // Create a placeholder logo texture programmatically (so canvas always shows something)
+      const logoW = 96, logoH = 96;
+      const lg = this.add.graphics();
+      lg.fillStyle(0x2b6cb0, 1);
+      lg.fillRoundedRect(0, 0, logoW, logoH, 12);
+      // small emblem
+      lg.fillStyle(0xffffff, 1);
+      lg.fillCircle(logoW/2, logoH/2, 18);
+      lg.generateTexture('logoTex', logoW, logoH);
+      lg.destroy();
+
+      logoSprite = this.add.image(900 - 110, 60, 'logoTex').setScale(1).setOrigin(0.5);
+      // continuous rotation tween
+      this.tweens.add({ targets: logoSprite, angle: 360, duration: 4000, repeat: -1, ease: 'Linear' });
+
+      // arm pointer (rectangle) that points to logoSprite
+      armSprite = this.add.rectangle(player.x + 28, player.y - 10, 44, 8, 0xffd27f).setOrigin(0, 0.5);
+      armSprite.setDepth(2);
+
+      // HUD DOM
+      this.hudDiv = document.createElement('div');
+      this.hudDiv.id = 'hud';
+      this.hudDiv.style.position = 'absolute';
+      this.hudDiv.style.left = '12px';
+      this.hudDiv.style.top = '12px';
+      this.hudDiv.style.zIndex = 5;
+      document.querySelector('#game-container').appendChild(this.hudDiv);
+      updateHud.call(this);
+    }
+
+    function update() {
+      // keep player on floor
+      if (player.y < 380) {
+        // in air
+      } else {
+        player.setY(380);
+        player.body.setVelocityY(0);
+      }
+
+      // rotate arm to point to logo
+      if (armSprite && logoSprite && player) {
+        armSprite.x = player.x + 20;
+        armSprite.y = player.y - 20;
+        const angle = Phaser.Math.Angle.Between(armSprite.x, armSprite.y, logoSprite.x, logoSprite.y);
+        armSprite.setRotation(angle);
+      }
+
+      if (obstaclesMoving) Phaser.Actions.IncX(obstacles.getChildren(), -5);
+      obstacles.getChildren().forEach(ob => { if (ob.x < -60) ob.destroy(); });
+    }
+
+    function spawnObstacle() {
+      const x = 900 + 40;
+      const y = 380;
+      const ob = obstacles.create(x, y, 'box');
+      ob.setImmovable(true);
+      ob.body.allowGravity = false;
+      ob.setScale(0.7);
+    }
+
+    async function handleObstacleOverlap(playerObj, obstacle) {
+      if (!canAsk) return;
+      canAsk = false;
+
+      // pause movement
+      obstaclesMoving = false;
+      spawnTimer.paused = true;
+
+      // select question from difficulty pool
+      const pool = QUESTIONS.filter(q => q.difficulty === settings.difficulty);
+      const poolToUse = pool.length ? pool : QUESTIONS;
+      const q = Phaser.Utils.Array.GetRandom(poolToUse || []);
+      if (!q) { obstaclesMoving = true; spawnTimer.paused = false; canAsk = true; return; }
+
+      const result = await openQuestionOverlay(q);
+      if (result.ok) {
+        score += 10;
+        removeNearestObstacle();
+      } else {
+        lives -= 1;
+      }
+
+      updateHud.call(this);
+
+      if (lives <= 0) {
+        gameOver();
+        return;
+      }
+
+      // resume
+      obstaclesMoving = true;
+      spawnTimer.paused = false;
+      canAsk = true;
+    }
+
+    function removeNearestObstacle() {
+      const list = obstacles.getChildren().slice().sort((a,b) => a.x - b.x);
+      if (list.length) list[0].destroy();
+    }
+
+    function updateHud() {
+      const container = document.querySelector('#game-container');
+      const hud = container.querySelector('#hud');
+      if (hud) {
+        // show uploaded DOM logo if present; otherwise show placeholder graphic (we generate inside canvas)
+        hud.innerHTML = `<img src="assets/images/cencapopaz_logo.png" alt="logo" onerror="this.style.display='none'"><div>Puntos: ${score}</div><div>Vidas: ${lives}</div>`;
+      }
+    }
+
+    function gameOver() {
+      const scores = JSON.parse(localStorage.getItem('pkj_scores_v1') || '[]');
+      const entry = { score: score, when: Date.now(), name: 'Jugador' };
+      scores.push(entry);
+      scores.sort((a,b) => b.score - a.score);
+      localStorage.setItem('pkj_scores_v1', JSON.stringify(scores.slice(0,20)));
+      alert('Game Over — Puntos: ' + score);
+      window.location.reload();
+    }
+  } // end startPhaserGame
+
+  // If user asks to start now, show menu first (handled earlier)
+  // End of script block
+  </script>
+</body>
+</html>
